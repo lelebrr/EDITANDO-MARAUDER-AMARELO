@@ -13,6 +13,7 @@
 #include "BatteryInterface.h"
 #include "SDInterface.h"
 #include "settings.h"
+#include "WPSCracker.h"
 
 #ifdef HAS_BUTTONS
   #include "Switches.h"
@@ -158,6 +159,7 @@ class MenuFunctions
     // WiFi menu stuff
     Menu wifiSnifferMenu;
     Menu wifiAttackMenu;
+    Menu wpsMenu;
     #ifdef HAS_GPS
       Menu wardrivingMenu;
     #endif
@@ -184,6 +186,8 @@ class MenuFunctions
 
     // Settings things menus
     Menu generateSSIDsMenu;
+
+    WPSCracker wps_cracker;
 
     static void lv_tick_handler();
 

