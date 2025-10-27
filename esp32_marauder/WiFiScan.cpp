@@ -608,17 +608,23 @@ void wpsScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (pkt->payload[30] == 0x88 && pkt->payload[31] == 0x8e) {
       // WSC_START
       if (pkt->payload[43] == 0x04) {
-        wifi_scan_obj.wps_attack.m1 = pkt->payload;
+        wifi_scan_obj.wps_attack.m1 = (uint8_t*)malloc(pkt->rx_ctrl.sig_len);
+        memcpy(wifi_scan_obj.wps_attack.m1, pkt->payload, pkt->rx_ctrl.sig_len);
+        wifi_scan_obj.wps_attack.m1_len = pkt->rx_ctrl.sig_len;
         wifi_scan_obj.wps_attack.has_m1 = true;
       }
       // WSC_MSG M2
       else if (pkt->payload[43] == 0x05) {
-        wifi_scan_obj.wps_attack.m2 = pkt->payload;
+        wifi_scan_obj.wps_attack.m2 = (uint8_t*)malloc(pkt->rx_ctrl.sig_len);
+        memcpy(wifi_scan_obj.wps_attack.m2, pkt->payload, pkt->rx_ctrl.sig_len);
+        wifi_scan_obj.wps_attack.m2_len = pkt->rx_ctrl.sig_len;
         wifi_scan_obj.wps_attack.has_m2 = true;
       }
       // WSC_MSG M3
       else if (pkt->payload[43] == 0x06) {
-        wifi_scan_obj.wps_attack.m3 = pkt->payload;
+        wifi_scan_obj.wps_attack.m3 = (uint8_t*)malloc(pkt->rx_ctrl.sig_len);
+        memcpy(wifi_scan_obj.wps_attack.m3, pkt->payload, pkt->rx_ctrl.sig_len);
+        wifi_scan_obj.wps_attack.m3_len = pkt->rx_ctrl.sig_len;
         wifi_scan_obj.wps_attack.has_m3 = true;
       }
     }
@@ -643,6 +649,20 @@ void wpsScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 
 WiFiScan::WiFiScan()
 {
+  this->wps_attack.m1 = NULL;
+  this->wps_attack.m2 = NULL;
+  this->wps_attack.m3 = NULL;
+  this->wps_attack.m4 = NULL;
+  this->wps_attack.m5 = NULL;
+  this->wps_attack.m6 = NULL;
+  this->wps_attack.m7 = NULL;
+  this->wps_attack.has_m1 = false;
+  this->wps_attack.has_m2 = false;
+  this->wps_attack.has_m3 = false;
+  this->wps_attack.has_m4 = false;
+  this->wps_attack.has_m5 = false;
+  this->wps_attack.has_m6 = false;
+  this->wps_attack.has_m7 = false;
 }
 
 /*String WiFiScan::macToString(const Station& station) {

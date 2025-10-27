@@ -6,7 +6,7 @@
 class WPSCracker {
 public:
     WPSCracker();
-    bool pixieDustAttack(uint8_t *m1, uint8_t *m2, uint8_t *m3, String &pin, String manufacturer);
+    bool pixieDustAttack(uint8_t *m1, size_t m1_len, uint8_t *m2, size_t m2_len, uint8_t *m3, size_t m3_len, String &pin, String manufacturer);
     bool onlineBruteWPS(uint8_t *bssid, String &pin);
 private:
     bool checkWPSChecksum(int pin);

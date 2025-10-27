@@ -2004,7 +2004,15 @@ void MenuFunctions::RunSetup()
         display_obj.clearScreen();
         display_obj.tft.println("Capturing WPS frames for " + wps_aps[i].ssid + "...");
         wifi_scan_obj.StartScan(WIFI_SCAN_WPS_CAPTURE, TFT_RED);
-        delay(15000);
+
+        unsigned long startTime = millis();
+        while (millis() - startTime < 15000) {
+          if (wifi_scan_obj.wps_attack.has_m1 && wifi_scan_obj.wps_attack.has_m2 && wifi_scan_obj.wps_attack.has_m3) {
+            break;
+          }
+          delay(100);
+        }
+
         wifi_scan_obj.StopScan(WIFI_SCAN_WPS_CAPTURE);
         display_obj.tft.println("Finished capturing. Attacking...");
         String pin;
@@ -2017,6 +2025,14 @@ void MenuFunctions::RunSetup()
         } else {
           display_obj.tft.println("Attack failed. WPS may be locked.");
         }
+
+        // Free memory
+        if (wifi_scan_obj.wps_attack.has_m1) free(wifi_scan_obj.wps_attack.m1);
+        if (wifi_scan_obj.wps_attack.has_m2) free(wifi_scan_obj.wps_attack.m2);
+        if (wifi_scan_obj.wps_attack.has_m3) free(wifi_scan_obj.wps_attack.m3);
+        wifi_scan_obj.wps_attack.has_m1 = false;
+        wifi_scan_obj.wps_attack.has_m2 = false;
+        wifi_scan_obj.wps_attack.has_m3 = false;
       });
     }
     this->changeMenu(&wpsMenu);
