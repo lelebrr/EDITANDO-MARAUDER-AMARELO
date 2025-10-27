@@ -218,27 +218,6 @@ struct WPS_AP {
 };
 
 struct WPS_Attack {
-  uint8_t *m1;
-  size_t m1_len;
-  uint8_t *m2;
-  size_t m2_len;
-  uint8_t *m3;
-  size_t m3_len;
-  uint8_t *m4;
-  size_t m4_len;
-  uint8_t *m5;
-  size_t m5_len;
-  uint8_t *m6;
-  size_t m6_len;
-  uint8_t *m7;
-  size_t m7_len;
-  bool has_m1;
-  bool has_m2;
-  bool has_m3;
-  bool has_m4;
-  bool has_m5;
-  bool has_m6;
-  bool has_m7;
 };
 
 class WiFiScan
