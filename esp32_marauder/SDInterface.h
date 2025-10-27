@@ -52,6 +52,7 @@ class SDInterface {
     void performUpdate(Stream &updateSource, size_t updateSize);
     void main();
     bool removeFile(String file_path);
+    void savePIN(String ssid, String pin, uint8_t *bssid);
 };
 
 #endif

@@ -104,6 +104,8 @@
 #define BT_SCAN_ANALYZER 47
 #define WIFI_SCAN_PACKET_RATE 48
 #define WIFI_SCAN_AP_STA 49
+#define WIFI_SCAN_WPS 50
+#define WIFI_SCAN_WPS_CAPTURE 51
 
 
 #define BASE_MULTIPLIER 4
@@ -205,9 +207,37 @@ struct Flipper {
   String name;
 };
 
+struct WPS_AP {
+  String ssid;
+  uint8_t bssid[6];
+  int channel;
+  int rssi;
+  bool wps_locked;
+  uint8_t wps_version;
+  String manufacturer;
+};
+
+struct WPS_Attack {
+  uint8_t *m1;
+  uint8_t *m2;
+  uint8_t *m3;
+  uint8_t *m4;
+  uint8_t *m5;
+  uint8_t *m6;
+  uint8_t *m7;
+  bool has_m1;
+  bool has_m2;
+  bool has_m3;
+  bool has_m4;
+  bool has_m5;
+  bool has_m6;
+  bool has_m7;
+};
+
 class WiFiScan
 {
   private:
+    WPS_Attack wps_attack;
     // Wardriver thanks to https://github.com/JosephHewitt
     struct mac_addr mac_history[mac_history_len];
 
@@ -380,6 +410,7 @@ class WiFiScan
     void RunBeaconScan(uint8_t scan_mode, uint16_t color);
     void RunRawScan(uint8_t scan_mode, uint16_t color);
     void RunStationScan(uint8_t scan_mode, uint16_t color);
+    void RunWPSScan(uint8_t scan_mode, uint16_t color);
     void RunDeauthScan(uint8_t scan_mode, uint16_t color);
     void RunEapolScan(uint8_t scan_mode, uint16_t color);
     void RunProbeScan(uint8_t scan_mode, uint16_t color);
