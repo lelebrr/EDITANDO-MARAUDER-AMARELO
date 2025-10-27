@@ -603,33 +603,7 @@ void wpsScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
   wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
   uint8_t *frame = pkt->payload;
 
-  if (wifi_scan_obj.currentScanMode == WIFI_SCAN_WPS_CAPTURE) {
-    // EAPOL packet
-    if (pkt->payload[30] == 0x88 && pkt->payload[31] == 0x8e) {
-      // WSC_START
-      if (pkt->payload[43] == 0x04) {
-        wifi_scan_obj.wps_attack.m1 = (uint8_t*)malloc(pkt->rx_ctrl.sig_len);
-        memcpy(wifi_scan_obj.wps_attack.m1, pkt->payload, pkt->rx_ctrl.sig_len);
-        wifi_scan_obj.wps_attack.m1_len = pkt->rx_ctrl.sig_len;
-        wifi_scan_obj.wps_attack.has_m1 = true;
-      }
-      // WSC_MSG M2
-      else if (pkt->payload[43] == 0x05) {
-        wifi_scan_obj.wps_attack.m2 = (uint8_t*)malloc(pkt->rx_ctrl.sig_len);
-        memcpy(wifi_scan_obj.wps_attack.m2, pkt->payload, pkt->rx_ctrl.sig_len);
-        wifi_scan_obj.wps_attack.m2_len = pkt->rx_ctrl.sig_len;
-        wifi_scan_obj.wps_attack.has_m2 = true;
-      }
-      // WSC_MSG M3
-      else if (pkt->payload[43] == 0x06) {
-        wifi_scan_obj.wps_attack.m3 = (uint8_t*)malloc(pkt->rx_ctrl.sig_len);
-        memcpy(wifi_scan_obj.wps_attack.m3, pkt->payload, pkt->rx_ctrl.sig_len);
-        wifi_scan_obj.wps_attack.m3_len = pkt->rx_ctrl.sig_len;
-        wifi_scan_obj.wps_attack.has_m3 = true;
-      }
-    }
-  }
-  else if (type == WIFI_PKT_MGMT && (frame[0] == 0x80 || frame[0] == 0x50)) {
+  if (type == WIFI_PKT_MGMT && (frame[0] == 0x80 || frame[0] == 0x50)) {
     int pos = 36; // After 802.11 header + fixed params
     while (pos < pkt->rx_ctrl.sig_len - 2) {
       uint8_t tag = frame[pos];
@@ -649,20 +623,6 @@ void wpsScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 
 WiFiScan::WiFiScan()
 {
-  this->wps_attack.m1 = NULL;
-  this->wps_attack.m2 = NULL;
-  this->wps_attack.m3 = NULL;
-  this->wps_attack.m4 = NULL;
-  this->wps_attack.m5 = NULL;
-  this->wps_attack.m6 = NULL;
-  this->wps_attack.m7 = NULL;
-  this->wps_attack.has_m1 = false;
-  this->wps_attack.has_m2 = false;
-  this->wps_attack.has_m3 = false;
-  this->wps_attack.has_m4 = false;
-  this->wps_attack.has_m5 = false;
-  this->wps_attack.has_m6 = false;
-  this->wps_attack.has_m7 = false;
 }
 
 /*String WiFiScan::macToString(const Station& station) {

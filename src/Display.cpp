@@ -566,7 +566,12 @@ void Display::buildBanner(String msg, int xpos)
 
 void Display::main(uint8_t scan_mode)
 {   
-    if ((scan_mode == LV_JOIN_WIFI) || (scan_mode == LV_ADD_SSID)) {
+    if (scan_mode == WIFI_SCAN_PWN) {
+      tft.fillScreen(TFT_BLACK);
+      tft.drawString("WPS CRACKER", 10, 10, 4);
+      tft.drawString("Toque para atacar", 10, 100, 2);
+    }
+    else if ((scan_mode == LV_JOIN_WIFI) || (scan_mode == LV_ADD_SSID)) {
         lv_task_handler();
     return;
     }
