@@ -135,16 +135,6 @@ void SDInterface::listDirToLinkedList(LinkedList<String>* file_names, String str
   }
 }
 
-void SDInterface::savePIN(String ssid, String pin, uint8_t *bssid) {
-  File file = SD.open("/wps_pins.txt", FILE_APPEND);
-  if (file) {
-    file.printf("%s | %s | %02X:%02X:%02X:%02X:%02X:%02X\n",
-      ssid.c_str(), pin.c_str(),
-      bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
-    file.close();
-  }
-}
-
 void SDInterface::listDir(String str_dir){
   if (this->supported) {
     File dir = SD.open(str_dir);

@@ -1,10 +1,9 @@
 #include "MenuFunctions.h"
 #include "lang_var.h"
-#include <vector>
 //#include "icons.h"
-extern std::vector<WPS_AP> wps_aps;
 #include "configs.h"
 #include "TouchDrvGT911.hpp"
+#include "WPSCracker.h"
 
 TouchDrvGT911 touch;
 
@@ -1751,7 +1750,7 @@ void MenuFunctions::RunSetup()
   bluetoothMenu.name = text_table1[19];
   wifiSnifferMenu.name = text_table1[20];
   wifiAttackMenu.name = text_table1[21];
-  wpsMenu.name = "WPS Attack";
+  wpsMenu.name = "WPS Attacks";
   wifiGeneralMenu.name = text_table1[22];
   saveFileMenu.name = "Save/Load Files";
   saveSSIDsMenu.name = "Save SSIDs";
@@ -1918,11 +1917,6 @@ void MenuFunctions::RunSetup()
     this->drawStatusBar();
     wifi_scan_obj.StartScan(WIFI_SCAN_SIG_STREN, TFT_CYAN);
   });
-  this->addNodes(&wifiSnifferMenu, "WPS Scan", TFTGREEN, NULL, BEACON_SNIFF, [this]() {
-    display_obj.clearScreen();
-    this->drawStatusBar();
-    wifi_scan_obj.StartScan(WIFI_SCAN_WPS, TFT_GREEN);
-  });
   
   // Build Wardriving menu
   #ifdef HAS_GPS
@@ -1993,28 +1987,57 @@ void MenuFunctions::RunSetup()
     this->drawStatusBar();
     wifi_scan_obj.StartScan(WIFI_ATTACK_DEAUTH_TARGETED, TFT_ORANGE);
   });
-
-  this->addNodes(&wifiAttackMenu, "WPS Attack", TFTRED, NULL, ATTACKS, [this]() {
-    wpsMenu.list->clear();
-    this->addNodes(&wpsMenu, text09, TFTLIGHTGREY, NULL, 0, [this]() {
-      this->changeMenu(wpsMenu.parentMenu);
-    });
-    for (int i = 0; i < wps_aps.size(); i++) {
-      this->addNodes(&wpsMenu, wps_aps[i].ssid, TFTCYAN, NULL, 255, [this, i](){
-        display_obj.clearScreen();
-        display_obj.tft.println("Attacking " + wps_aps[i].ssid + "...");
-        String pin;
-        if (wps_cracker.onlineBruteWPS(wps_aps[i].bssid, pin)) {
-          display_obj.tft.println("Brute force OK! PIN: " + pin);
-          sd_obj.savePIN(wps_aps[i].ssid, pin, wps_aps[i].bssid);
-        } else {
-          display_obj.tft.println("Attack failed. WPS may be locked.");
-        }
-      });
-    }
+  this->addNodes(&wifiAttackMenu, "WPS Attack", TFTGREEN, NULL, ATTACKS, [this]() {
     this->changeMenu(&wpsMenu);
   });
 
+  // Build WPS menu
+  wpsMenu.parentMenu = &wifiAttackMenu;
+  this->addNodes(&wpsMenu, text09, TFTLIGHTGREY, NULL, 0, [this]() {
+    this->changeMenu(wpsMenu.parentMenu);
+  });
+  this->addNodes(&wpsMenu, "Scan WPS", TFTCYAN, NULL, SNIFFERS, [this]() {
+    this->runWPSAttack();
+  });
+  wpsAttackMenu.list = new LinkedList<MenuNode>();
+  wpsAttackMenu.parentMenu = &wpsMenu;
+}
+
+void MenuFunctions::wps_display_callback(const String& text) {
+  display_obj.clearScreen();
+  display_obj.tft.setCursor(0, 0);
+  display_obj.tft.println(text);
+}
+
+void MenuFunctions::runWPSAttack() {
+  display_obj.clearScreen();
+  wps_cracker.setDisplayCallback(wps_display_callback);
+  wps_cracker.scan();
+
+  // Clear previous menu items
+  wpsAttackMenu.list->clear();
+
+  // Add a back button
+  addNodes(&wpsAttackMenu, text09, TFTLIGHTGREY, NULL, 0, [this]() {
+    this->changeMenu(wpsAttackMenu.parentMenu);
+  });
+
+  // Add each WPS-enabled AP to the menu
+  for (int i = 0; i < wps_cracker.aps.size(); i++) {
+    AccessPoint ap = wps_cracker.aps[i];
+    String menu_text = ap.essid;
+    addNodes(&wpsAttackMenu, menu_text, TFTCYAN, NULL, 0, [this, i]() {
+      // Placeholder for attack logic
+      display_obj.clearScreen();
+      display_obj.tft.println("Atacando " + wps_cracker.aps[i].essid + "...");
+      wps_cracker.attack(i);
+      delay(2000);
+      this->changeMenu(&wpsAttackMenu);
+    });
+  }
+
+  this->changeMenu(&wpsAttackMenu);
+}
   // Build WiFi General menu
   wifiGeneralMenu.parentMenu = &wifiMenu;
   this->addNodes(&wifiGeneralMenu, text09, TFTLIGHTGREY, NULL, 0, [this]() {
