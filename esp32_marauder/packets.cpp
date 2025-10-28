@@ -2,6 +2,16 @@
 #include <string.h>
 #include "wps_crypto.h"
 
+// Helper function to add a TLV attribute to a buffer
+static int add_tlv(uint8_t *buf, uint16_t type, uint16_t len, const void *value) {
+  buf[0] = (type >> 8) & 0xFF;
+  buf[1] = type & 0xFF;
+  buf[2] = (len >> 8) & 0xFF;
+  buf[3] = len & 0xFF;
+  memcpy(buf + 4, value, len);
+  return len + 4;
+}
+
 void build_wps_m1(struct wps_m1_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid) {
   // Frame control: Probe Request
   pkt.hdr.frame_control[0] = 0x40;
@@ -53,8 +63,41 @@ void build_wps_m1(struct wps_m1_packet &pkt, const uint8_t *src_mac, const uint8
   pkt.len = sizeof(struct ieee80211_frame) + sizeof(wps_ie);
 }
 
-void build_wps_m3(struct wps_m3_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid, const char *pin, const uint8_t *pke, const uint8_t *pkr) {
-  // This is a placeholder and needs to be fully implemented
+void build_wps_m3(struct wps_m3_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid, const char *pin, const uint8_t *pke, const uint8_t *pkr, const uint8_t *r_nonce) {
+  uint8_t *buf = pkt.wps_data;
+  int len = 0;
+
+  uint8_t version = 0x10;
+  len += add_tlv(buf + len, 0x104A, 1, &version);
+
+  uint8_t msg_type = 0x08; // M3
+  len += add_tlv(buf + len, 0x1022, 1, &msg_type);
+
+  uint8_t e_nonce[16];
+  for (int i = 0; i < 16; i++) e_nonce[i] = esp_random();
+  len += add_tlv(buf + len, 0x101A, 16, e_nonce);
+
+  len += add_tlv(buf + len, 0x1039, 16, r_nonce);
+
+  // E-Hash1 and E-Hash2
+  uint8_t auth_key[32];
+  uint8_t shared_secret[192]; // Placeholder, should be derived from DH
+  derive_auth_key(shared_secret, auth_key);
+  uint8_t e_hash1[32], e_hash2[32];
+  calculate_e_hashes(shared_secret, pke, pkr, auth_key, e_hash1, e_hash2);
+  len += add_tlv(buf + len, 0x1014, 32, e_hash1);
+  len += add_tlv(buf + len, 0x1015, 32, e_hash2);
+
+  pkt.len = len;
+}
+
+void build_wps_m5(struct wps_m5_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid, const char *pin, const uint8_t *pke, const uint8_t *pkr, const uint8_t *r_nonce) {
+  // Placeholder
+  pkt.len = 0;
+}
+
+void build_wps_m7(struct wps_m7_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid, const char *pin, const uint8_t *pke, const uint8_t *pkr, const uint8_t *r_nonce) {
+  // Placeholder
   pkt.len = 0;
 }
 

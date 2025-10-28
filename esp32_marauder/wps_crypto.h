@@ -24,4 +24,7 @@ bool diffie_hellman(const uint8_t *p, const uint8_t *g,
 void calculate_e_hashes(const uint8_t *shared_secret, const uint8_t *pke, const uint8_t *pkr,
                         const uint8_t *auth_key, uint8_t *e_hash1, uint8_t *e_hash2);
 
+// Function to derive the AuthKey
+void derive_auth_key(const uint8_t *shared_secret, uint8_t *auth_key);
+
 #endif // WPS_CRYPTO_H

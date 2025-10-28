@@ -1,6 +1,8 @@
 #include "wps_crypto.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/md.h"
+#include "mbedtls/aes.h"
+#include "mbedtls/dhm.h"
 
 void hmac_sha256(const uint8_t *key, size_t key_len,
                  const uint8_t *data, size_t data_len,
@@ -79,4 +81,9 @@ void calculate_e_hashes(const uint8_t *shared_secret, const uint8_t *pke, const 
 
   hmac_sha256(auth_key, 32, data, 192 * 2, e_hash1);
   hmac_sha256(auth_key, 32, e_hash1, 32, e_hash2);
+}
+
+void derive_auth_key(const uint8_t *shared_secret, uint8_t *auth_key) {
+  const char *personalization_string = "WPS-PIN";
+  hmac_sha256(shared_secret, 32, (const uint8_t *)personalization_string, strlen(personalization_string), auth_key);
 }
