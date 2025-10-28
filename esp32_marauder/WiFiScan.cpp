@@ -22,12 +22,9 @@ int num_eapol = 0;
 
 LinkedList<ssid>* ssids;
 LinkedList<AccessPoint>* access_points;
-#include <vector>
-
 LinkedList<Station>* stations;
 LinkedList<AirTag>* airtags;
 LinkedList<Flipper>* flippers;
-std::vector<WPS_AP> wps_aps;
 
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
     if (arg == 31337)
@@ -530,96 +527,6 @@ extern "C" {
   };
 #endif
 
-// New functions for WPS scanning
-static int findWPSAttribute(uint8_t *data, int len, uint16_t attr_id) {
-  int pos = 0;
-  while (pos < len - 3) {
-    uint16_t id = (data[pos] << 8) | data[pos + 1];
-    uint16_t attr_len = (data[pos + 2] << 8) | data[pos + 3];
-    if (id == attr_id) return pos + 4;
-    pos += 4 + attr_len;
-  }
-  return -1;
-}
-
-static String extractWpsManufacturer(uint8_t *data, int len) {
-  int pos = findWPSAttribute(data, len, 0x1023); // Manufacturer attr
-  if (pos != -1) {
-    uint16_t m_len = (data[pos - 2] << 8) | data[pos - 1];
-    return String((char*)&data[pos], m_len);
-  }
-  return "Unknown";
-}
-
-static void parseWPS_IE(uint8_t *data, int len, wifi_promiscuous_pkt_t *pkt) {
-  WPS_AP ap;
-
-  // BSSID
-  memcpy(ap.bssid, pkt->payload + 10, 6);
-
-  // Channel
-  ap.channel = pkt->rx_ctrl.channel;
-
-  // RSSI
-  ap.rssi = pkt->rx_ctrl.rssi;
-
-  // SSID
-  int ssid_len_pos = 37;
-  int ssid_len = pkt->payload[ssid_len_pos];
-  if(ssid_len > 0 && ssid_len <= 32) {
-    char ssid_char[33];
-    memcpy(ssid_char, pkt->payload + ssid_len_pos + 1, ssid_len);
-    ssid_char[ssid_len] = '\0';
-    ap.ssid = String(ssid_char);
-  } else {
-    ap.ssid = "Hidden";
-  }
-
-  ap.manufacturer = extractWpsManufacturer(data, len);
-
-  if (findWPSAttribute(data, len, 0x104A) != -1) { // WPS State = Configured
-    int version_pos = findWPSAttribute(data, len, 0x1044);
-    if(version_pos != -1) ap.wps_version = data[version_pos + 2];
-
-    int locked_pos = findWPSAttribute(data, len, 0x1057);
-    if(locked_pos != -1) ap.wps_locked = (data[locked_pos + 2] == 0x01);
-
-    // Check if AP already in list
-    bool found = false;
-    for(auto const& existing_ap : wps_aps) {
-        if(memcmp(existing_ap.bssid, ap.bssid, 6) == 0) {
-            found = true;
-            break;
-        }
-    }
-    if(!found) {
-        wps_aps.push_back(ap);
-    }
-  }
-}
-
-void wpsScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
-  extern WiFiScan wifi_scan_obj;
-  wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
-  uint8_t *frame = pkt->payload;
-
-  if (type == WIFI_PKT_MGMT && (frame[0] == 0x80 || frame[0] == 0x50)) {
-    int pos = 36; // After 802.11 header + fixed params
-    while (pos < pkt->rx_ctrl.sig_len - 2) {
-      uint8_t tag = frame[pos];
-      uint8_t len = frame[pos + 1];
-      if (pos + 2 + len > pkt->rx_ctrl.sig_len) {
-          break;
-      }
-      if (tag == 0xDD && len >= 4 && memcmp(&frame[pos + 2], "\x00\x50\xF2\x04", 4) == 0) {
-        parseWPS_IE(&frame[pos + 6], len - 4, pkt);
-        break;
-      }
-      pos += 2 + len;
-    }
-  }
-}
-
 
 WiFiScan::WiFiScan()
 {
@@ -961,9 +868,6 @@ void WiFiScan::StartScan(uint8_t scan_mode, uint16_t color)
     #ifdef HAS_GPS
       gps_obj.enable_queue();
     #endif
-  }
-  else if (scan_mode == WIFI_SCAN_WPS) {
-    RunWPSScan(scan_mode, color);
   }
 
   WiFiScan::currentScanMode = scan_mode;
@@ -1734,54 +1638,6 @@ void WiFiScan::RunEvilPortal(uint8_t scan_mode, uint16_t color)
   //}
   //else
   //  Serial.println("Setup EvilPortal. Current mode: " + this->currentScanMode);
-  this->wifi_initialized = true;
-  initTime = millis();
-}
-
-void WiFiScan::RunWPSScan(uint8_t scan_mode, uint16_t color)
-{
-  #ifdef MARAUDER_FLIPPER
-    flipper_led.sniffLED();
-  #elif defined(MARAUDER_V4)
-    flipper_led.sniffLED();
-  #elif defined(XIAO_ESP32_S3)
-    xiao_led.sniffLED();
-  #elif defined(MARAUDER_M5STICKC)
-    stickc_led.sniffLED();
-  #else
-    led_obj.setMode(MODE_SNIFF);
-  #endif
-
-  #ifdef HAS_SCREEN
-    display_obj.TOP_FIXED_AREA_2 = 48;
-    display_obj.tteBar = true;
-    display_obj.print_delay_1 = 15;
-    display_obj.print_delay_2 = 10;
-    display_obj.initScrollValues(true);
-    display_obj.tft.setTextWrap(false);
-    display_obj.tft.setTextColor(TFT_WHITE, color);
-    #ifdef HAS_FULL_SCREEN
-      display_obj.tft.fillRect(0,16,TFT_WIDTH,16, color);
-      display_obj.tft.drawCentreString("WPS Scan",TFT_WIDTH/2,16,2);
-    #endif
-    #if defined(HAS_ILI9341) || defined(HAS_ST7796) || defined(HAS_ST7789)
-      display_obj.touchToExit();
-    #endif
-    display_obj.tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    display_obj.setupScrollArea(display_obj.TOP_FIXED_AREA_2, BOT_FIXED_AREA);
-  #endif
-
-  wps_aps.clear();
-
-  esp_wifi_init(&cfg2);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_NULL);
-  esp_wifi_start();
-  this->setMac();
-  esp_wifi_set_promiscuous(true);
-  esp_wifi_set_promiscuous_filter(&filt);
-  esp_wifi_set_promiscuous_rx_cb(&wpsScanCallback);
-  esp_wifi_set_channel(set_channel, WIFI_SECOND_CHAN_NONE);
   this->wifi_initialized = true;
   initTime = millis();
 }

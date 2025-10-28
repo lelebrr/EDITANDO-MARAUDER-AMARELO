@@ -9,11 +9,11 @@
 
 #define BATTERY_ANALOG_ON 0
 
+#include "WPSCracker.h"
 #include "WiFiScan.h"
 #include "BatteryInterface.h"
 #include "SDInterface.h"
 #include "settings.h"
-#include "WPSCracker.h"
 
 #ifdef HAS_BUTTONS
   #include "Switches.h"
@@ -160,6 +160,7 @@ class MenuFunctions
     Menu wifiSnifferMenu;
     Menu wifiAttackMenu;
     Menu wpsMenu;
+    Menu wpsAttackMenu;
     #ifdef HAS_GPS
       Menu wardrivingMenu;
     #endif
@@ -187,8 +188,6 @@ class MenuFunctions
     // Settings things menus
     Menu generateSSIDsMenu;
 
-    WPSCracker wps_cracker;
-
     static void lv_tick_handler();
 
     // Menu icons
@@ -213,6 +212,11 @@ class MenuFunctions
     #if !defined(HAS_ILI9341) && !defined(HAS_ST7796) && !defined(HAS_ST7789) && defined(HAS_BUTTONS)
       void miniKeyboard(Menu * targetMenu);
     #endif
+
+    void runWPSAttack();
+
+    WPSCracker wps_cracker;
+    static void wps_display_callback(const String& text);
 
     // Unified updateTouch function with conditional signatures
     #if defined(CYD_32CAP) || defined(CYD_35CAP)
