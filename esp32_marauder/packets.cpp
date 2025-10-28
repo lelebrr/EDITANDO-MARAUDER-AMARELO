@@ -1,5 +1,6 @@
 #include "packets.h"
 #include <string.h>
+#include "wps_crypto.h"
 
 void build_wps_m1(struct wps_m1_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid) {
   // Frame control: Probe Request
@@ -53,27 +54,25 @@ void build_wps_m1(struct wps_m1_packet &pkt, const uint8_t *src_mac, const uint8
 }
 
 void build_wps_m3(struct wps_m3_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid, const char *pin, const uint8_t *pke, const uint8_t *pkr) {
-  // Frame control: Data
-  pkt.hdr.frame_control[0] = 0x08;
-  pkt.hdr.frame_control[1] = 0x00;
+  // This is a placeholder and needs to be fully implemented
+  pkt.len = 0;
+}
 
-  // Duration
-  pkt.hdr.duration[0] = 0x00;
-  pkt.hdr.duration[1] = 0x00;
+const uint8_t *parse_wps_ie(const uint8_t *wps_ie, int wps_ie_len, uint16_t attr_id, uint16_t *attr_len) {
+  int i = 0;
+  while (i < wps_ie_len) {
+    uint16_t current_attr_id = (wps_ie[i] << 8) | wps_ie[i + 1];
+    uint16_t current_attr_len = (wps_ie[i + 2] << 8) | wps_ie[i + 3];
 
-  // Set MAC addresses
-  memcpy(pkt.hdr.addr1, bssid, 6); // Destination
-  memcpy(pkt.hdr.addr2, src_mac, 6); // Source
-  memcpy(pkt.hdr.addr3, bssid, 6); // BSSID
+    if (current_attr_id == attr_id) {
+      if (attr_len) {
+        *attr_len = current_attr_len;
+      }
+      return &wps_ie[i + 4];
+    }
 
-  // Sequence control
-  pkt.hdr.seq_ctrl[0] = 0x00;
-  pkt.hdr.seq_ctrl[1] = 0x00;
+    i += 4 + current_attr_len;
+  }
 
-  // WPS Information Element for M3
-  // This is a simplified placeholder. A real implementation would be more complex.
-  uint8_t wps_data[] = { 0x10, 0x08, 0x00, 0x02, 0x00, 0x04 }; // WPS IE header with message type M3
-
-  memcpy(pkt.wps_data, wps_data, sizeof(wps_data));
-  pkt.len = sizeof(struct ieee80211_frame) + sizeof(wps_data);
+  return NULL;
 }

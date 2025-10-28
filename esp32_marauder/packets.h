@@ -48,5 +48,8 @@ struct wps_m4_packet {
 // Function to build a WPS M3 message
 void build_wps_m3(struct wps_m3_packet &pkt, const uint8_t *src_mac, const uint8_t *bssid, const char *pin, const uint8_t *pke, const uint8_t *pkr);
 
+// Function to parse WPS Information Elements
+const uint8_t *parse_wps_ie(const uint8_t *wps_ie, int wps_ie_len, uint16_t attr_id, uint16_t *attr_len);
+
 
 #endif // PACKETS_H

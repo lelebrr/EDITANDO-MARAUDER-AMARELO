@@ -70,3 +70,13 @@ bool diffie_hellman(const uint8_t *p, const uint8_t *g,
   mbedtls_dhm_free(&dhm);
   return true;
 }
+
+void calculate_e_hashes(const uint8_t *shared_secret, const uint8_t *pke, const uint8_t *pkr,
+                        const uint8_t *auth_key, uint8_t *e_hash1, uint8_t *e_hash2) {
+  uint8_t data[192 * 2];
+  memcpy(data, pke, 192);
+  memcpy(data + 192, pkr, 192);
+
+  hmac_sha256(auth_key, 32, data, 192 * 2, e_hash1);
+  hmac_sha256(auth_key, 32, e_hash1, 32, e_hash2);
+}

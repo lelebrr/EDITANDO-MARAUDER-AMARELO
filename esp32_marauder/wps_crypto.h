@@ -20,4 +20,8 @@ bool diffie_hellman(const uint8_t *p, const uint8_t *g,
                     uint8_t *pub_key, size_t &pub_key_len,
                     uint8_t *secret_key, size_t &secret_key_len);
 
+// Function to calculate E-Hash1 and E-Hash2
+void calculate_e_hashes(const uint8_t *shared_secret, const uint8_t *pke, const uint8_t *pkr,
+                        const uint8_t *auth_key, uint8_t *e_hash1, uint8_t *e_hash2);
+
 #endif // WPS_CRYPTO_H
